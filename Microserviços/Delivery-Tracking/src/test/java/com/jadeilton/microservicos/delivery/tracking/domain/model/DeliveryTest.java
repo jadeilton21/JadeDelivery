@@ -1,5 +1,6 @@
 package com.jadeilton.microservicos.delivery.tracking.domain.model;
 
+import com.jadeilton.microservicos.delivery.tracking.domain.exception.DomainException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -23,6 +24,17 @@ class DeliveryTest {
         assertNotNull(delivery.getPlacedAt());
 
 
+    }
+
+    @Test
+    public void shouldNotPlace(){
+        Delivery delivery = Delivery.draft();
+
+        assertThrows(DomainException.class, () -> delivery.place());
+
+
+        assertEquals(DeliveryStatus.DRAFT, delivery.getStatus());
+        assertNull(delivery.getPlacedAt());
     }
 
     private Delivery.PreparationDetails createdValidPreparationDetails() {
