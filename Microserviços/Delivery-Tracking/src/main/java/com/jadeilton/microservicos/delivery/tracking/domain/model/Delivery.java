@@ -61,12 +61,12 @@ public class Delivery {
         @Embedded
         @AttributeOverride(
                 {
-                        @AttributeOverride(name = "zipCode", column = @Column(name = "sender_zip_code")),
-                        @AttributeOverride(name = "street", column = @Column(name = "sender_street")),
-                        @AttributeOverride(name = "number" , column = @Column(name ="sender_number")),
-                        @AttributeOverride(name = "complement" , column = @Column(name ="sender_complement")),
-                        @AttributeOverride(name = "name" , column = @Column(name ="sender_name")),
-                        @AttributeOverride(name = "phone" , column = @Column(name ="sender_phone"))
+                        @AttributeOverride(name = "zipCode", column = @Column(name = "recipient_zip_code")),
+                        @AttributeOverride(name = "street", column = @Column(name = "recipient_street")),
+                        @AttributeOverride(name = "number" , column = @Column(name ="recipient_number")),
+                        @AttributeOverride(name = "complement" , column = @Column(name ="recipient_complement")),
+                        @AttributeOverride(name = "name" , column = @Column(name ="recipient_name")),
+                        @AttributeOverride(name = "phone" , column = @Column(name ="recipient_phone"))
                 }
         )
 
@@ -146,6 +146,76 @@ public class Delivery {
                 this.setPlacedAt(OffsetDateTime.now());
         }
 
+
+        public void picKUp(UUID courierId){
+
+                this.setCourierId(courierId);
+                this.changeStatusTo(DeliveryStatus.IN_TRANSIT);
+                this.setAssignedAt(OffsetDateTime.now());
+        }
+
+        public List<Item> getItems() {
+                return Collections.unmodifiableList(this.items);
+        }
+
+        private void calculateTotalItems(){
+                int totalItems = getItems().stream().mapToInt(Item::getQuantity).sum();
+                setTotalItems(totalItems);
+        }
+
+        private void verifyIfCanBePlaced(){
+
+
+
+                if(!isFilled()){
+                        throw new DomainException();
+                }
+
+                if(!getStatus().equals(DeliveryStatus.DRAFT)){
+                        throw new DomainException();
+                }
+        }
+
+
+        private void verifyIfCanBeEdited(){
+                if(!getStatus().equals(DeliveryStatus.DRAFT)){
+                        throw new DomainException();
+                }
+        }
+
+
+        private boolean isFilled(){
+                return this.getSender() != null
+                        && this.getRecipient() != null
+                        && this.getTotalCost()  != null;
+        }
+
+
+        private void changeStatusTo(DeliveryStatus newStatus){
+
+                if(newStatus != null && this.getStatus().canChangeTo(newStatus)){
+                        throw new DomainException(
+                                "Invalid Status Transition from" + this.getStatus() +
+                                        "to" + newStatus
+                        );
+                }
+
+
+                this.setStatus(newStatus);
+        }
+
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        public static class PreparationDetails{
+
+
+                private ContactPoint sender;
+                private ContactPoint recipient;
+                private BigDecimal distanceFee;
+                private BigDecimal courierPayout;
+                private Duration expectedDeliveyTime;
+        }
 
 
 }
