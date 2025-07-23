@@ -1,5 +1,6 @@
 package com.jadeilton.microservicos.delivery.tracking.domain.model;
 
+import com.jadeilton.microservicos.delivery.tracking.domain.exception.DomainException;
 import jakarta.persistence.*;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,9 +15,8 @@ import java.util.UUID;
 
 
 
-
 @Entity
-@NoArgsConstructor(access = AccessLevel.PACKAGE )
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Setter(AccessLevel.PRIVATE)
 @Getter
@@ -25,14 +25,14 @@ public class Delivery {
         @Id
         @EqualsAndHashCode.Include
         private UUID id;
-        private UUID courierId;
 
+        private UUID courierId;
 
         private DeliveryStatus status;
 
         private OffsetDateTime placedAt;
         private OffsetDateTime assignedAt;
-        private OffsetDateTime expectdDeliveryAt;
+        private OffsetDateTime expectedDeliveryAt;
         private OffsetDateTime fulfilledAt;
 
         private BigDecimal distanceFee;
@@ -41,67 +41,53 @@ public class Delivery {
 
         private Integer totalItems;
 
-
         @Embedded
-        @AttributeOverride(
-                {
-                        @AttributeOverride(name = "zipCode", column = @Column(name = "sender_zip_code")),
-                        @AttributeOverride(name = "street", column = @Column(name = "sender_street")),
-                        @AttributeOverride(name = "number" , column = @Column(name ="sender_number")),
-                        @AttributeOverride(name = "complement" , column = @Column(name ="sender_complement")),
-                        @AttributeOverride(name = "name" , column = @Column(name ="sender_name")),
-                        @AttributeOverride(name = "phone" , column = @Column(name ="sender_phone"))
-                }
-        )
-
+        @AttributeOverrides({
+                @AttributeOverride(name = "zipCode", column = @Column(name = "sender_zip_code")),
+                @AttributeOverride(name = "street", column = @Column(name = "sender_street")),
+                @AttributeOverride(name = "number", column = @Column(name = "sender_number")),
+                @AttributeOverride(name = "complement", column = @Column(name = "sender_complement")),
+                @AttributeOverride(name = "name", column = @Column(name = "sender_name")),
+                @AttributeOverride(name = "phone", column = @Column(name = "sender_phone"))
+        })
         private ContactPoint sender;
 
-
-
         @Embedded
-        @AttributeOverride(
-                {
-                        @AttributeOverride(name = "zipCode", column = @Column(name = "recipient_zip_code")),
-                        @AttributeOverride(name = "street", column = @Column(name = "recipient_street")),
-                        @AttributeOverride(name = "number" , column = @Column(name ="recipient_number")),
-                        @AttributeOverride(name = "complement" , column = @Column(name ="recipient_complement")),
-                        @AttributeOverride(name = "name" , column = @Column(name ="recipient_name")),
-                        @AttributeOverride(name = "phone" , column = @Column(name ="recipient_phone"))
-                }
-        )
+        @AttributeOverrides({
+                @AttributeOverride(name = "zipCode", column = @Column(name = "recipient_zip_code")),
+                @AttributeOverride(name = "street", column = @Column(name = "recipient_street")),
+                @AttributeOverride(name = "number", column = @Column(name = "recipient_number")),
+                @AttributeOverride(name = "complement", column = @Column(name = "recipient_complement")),
+                @AttributeOverride(name = "name", column = @Column(name = "recipient_name")),
+                @AttributeOverride(name = "phone", column = @Column(name = "recipient_phone"))
+        })
+        private ContactPoint recipient;
 
-        private ContactPoint sender;
-
-
-
+        @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "delivery")
         private List<Item> items = new ArrayList<>();
 
 
-        public static Delivery draft(){
-                Delivery delivery = new Delivery();
 
+
+        public static Delivery draft() {
+                Delivery delivery = new Delivery();
                 delivery.setId(UUID.randomUUID());
-                delivery.setStatus(DeliveryStatus.DRAFT);
+                delivery.setStatus( DeliveryStatus.DRAFT);
                 delivery.setTotalItems(0);
                 delivery.setTotalCost(BigDecimal.ZERO);
-                delivery.setTotalCost(BigDecimal.ZERO);
+                delivery.setCourierPayout(BigDecimal.ZERO);
                 delivery.setDistanceFee(BigDecimal.ZERO);
                 return delivery;
-
         }
 
-
-
-
-        public UUID addItem(String name, int quantity)  {
+        public UUID addItem(String name, int quantity) {
                 Item item = Item.brandNew(name, quantity, this);
                 items.add(item);
                 calculateTotalItems();
                 return item.getId();
         }
 
-
-        public void removeItem(UUID itemId){
+        public void removeItem(UUID itemId) {
                 items.removeIf(item -> item.getId().equals(itemId));
                 calculateTotalItems();
         }
@@ -110,112 +96,92 @@ public class Delivery {
                 Item item = getItems().stream().filter(i -> i.getId().equals(itemId))
                         .findFirst().orElseThrow();
 
-
                 item.setQuantity(quantity);
                 calculateTotalItems();
         }
 
-
-
-
-        public void removeItems(){
-
-                items,clear();
+        public void removeItems() {
+                items.clear();
                 calculateTotalItems();
-
         }
 
-
-        public void editPreparationDelails(PreparationDetails details){
+        public void editPreparationDetails(PreparationDetails details) {
                 verifyIfCanBeEdited();
 
                 setSender(details.getSender());
                 setRecipient(details.getRecipient());
                 setDistanceFee(details.getDistanceFee());
                 setCourierPayout(details.getCourierPayout());
-                setExpecteDeliveryAt(OffsetDateTime.now().plus(details.getExpectedDeliveyTime()));
 
+                setExpectedDeliveryAt(OffsetDateTime.now().plus(details.getExpectedDeliveryTime()));
                 setTotalCost(this.getDistanceFee().add(this.getCourierPayout()));
         }
 
-
-
-        public void place(){
+        public void place() {
                 verifyIfCanBePlaced();
                 this.changeStatusTo(DeliveryStatus.WAITING_FOR_COURIER);
                 this.setPlacedAt(OffsetDateTime.now());
         }
 
-
-        public void picKUp(UUID courierId){
-
+        public void pickUp(UUID courierId) {
                 this.setCourierId(courierId);
                 this.changeStatusTo(DeliveryStatus.IN_TRANSIT);
                 this.setAssignedAt(OffsetDateTime.now());
+        }
+
+        public void markAsDelivered() {
+                this.changeStatusTo(DeliveryStatus.DELIVERY);
+                this.setFulfilledAt(OffsetDateTime.now());
         }
 
         public List<Item> getItems() {
                 return Collections.unmodifiableList(this.items);
         }
 
-        private void calculateTotalItems(){
+        private void calculateTotalItems() {
                 int totalItems = getItems().stream().mapToInt(Item::getQuantity).sum();
                 setTotalItems(totalItems);
         }
 
-        private void verifyIfCanBePlaced(){
-
-
-
-                if(!isFilled()){
+        private void verifyIfCanBePlaced() {
+                if (!isFilled()) {
                         throw new DomainException();
                 }
-
-                if(!getStatus().equals(DeliveryStatus.DRAFT)){
+                if (!getStatus().equals(DeliveryStatus.DRAFT)) {
                         throw new DomainException();
                 }
         }
 
-
-        private void verifyIfCanBeEdited(){
-                if(!getStatus().equals(DeliveryStatus.DRAFT)){
+        private void verifyIfCanBeEdited() {
+                if (!getStatus().equals(DeliveryStatus.DRAFT)) {
                         throw new DomainException();
                 }
         }
 
-
-        private boolean isFilled(){
+        private boolean isFilled() {
                 return this.getSender() != null
                         && this.getRecipient() != null
-                        && this.getTotalCost()  != null;
+                        && this.getTotalCost() != null;
         }
 
-
-        private void changeStatusTo(DeliveryStatus newStatus){
-
-                if(newStatus != null && this.getStatus().canChangeTo(newStatus)){
+        private void changeStatusTo(DeliveryStatus newStatus) {
+                if (newStatus != null && this.getStatus().canNotChange(newStatus)) {
                         throw new DomainException(
-                                "Invalid Status Transition from" + this.getStatus() +
-                                        "to" + newStatus
+                                "Invalid status transition from " + this.getStatus() +
+                                        " to " + newStatus
                         );
                 }
-
-
                 this.setStatus(newStatus);
         }
 
         @Getter
-        @Builder
         @AllArgsConstructor
-        public static class PreparationDetails{
-
-
+        @Builder
+        public static class PreparationDetails {
                 private ContactPoint sender;
                 private ContactPoint recipient;
                 private BigDecimal distanceFee;
                 private BigDecimal courierPayout;
-                private Duration expectedDeliveyTime;
+                private Duration expectedDeliveryTime;
         }
-
-
 }
