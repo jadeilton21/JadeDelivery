@@ -19,4 +19,11 @@ class DeliveryStatusTest {
         );
     }
 
+
+    @Test
+    void draft_canChangeToInTransit(){
+        assertTrue(
+                DeliveryStatus.DRAFT.canNotChange(DeliveryStatus.IN_TRANSIT)
+        );
+    }
 }
